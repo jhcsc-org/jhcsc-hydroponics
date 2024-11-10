@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hydroponics Monitoring Dashboard</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Socket.io -->
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .card {
+            transition: transform 0.2s;
+        }
+
+        .sensor-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .status-active {
+            background-color: #28a745;
+        }
+
+        .status-inactive {
+            background-color: #dc3545;
+        }
+
+        .btn .status-indicator {
+            left: 1rem;
+        }
+
+        #relay_states .btn {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        #relay_states .btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .settings-button {
+            padding: 0;
+            background: none;
+            border: none;
+            color: white;
+        }
+
+        .settings-button:hover {
+            color: #f8f9fa;
+        }
+
+        .popover {
+            max-width: 400px;
+        }
+
+        .popover-body {
+            padding: 1rem;
+        }
+
+        .settings-button,
+        .toggle-all-button {
+            padding: 0.25rem 0.75rem;
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            color: white;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+        }
+
+        .settings-button:hover,
+        .toggle-all-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #f8f9fa;
+        }
+
+        .popover {
+            max-width: 400px;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+
+        .popover-header {
+            background-color: #198754;
+            color: white;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .popover-body {
+            padding: 1rem;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-leaf me-2"></i>Hydroponics Monitoring Dashboard
+            </span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Main Sensors Section -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-temperature-high text-primary mb-3" style="font-size: 2rem;"></i>
+                        <h5 class="card-title">Temperature</h5>
+                        <div class="sensor-value text-primary">
+                            <span id="temperature">--</span>°C
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-tint text-info mb-3" style="font-size: 2rem;"></i>
+                        <h5 class="card-title">Humidity</h5>
+                        <div class="sensor-value text-info">
+                            <span id="humidity">--</span>%
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-sun text-warning mb-3" style="font-size: 2rem;"></i>
+                        <h5 class="card-title">Light Level</h5>
+                        <div class="sensor-value text-warning">
+                            <span id="light_level">--</span>%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- pH Sensors and Relay Controls -->
+        <div class="row">
+            <!-- pH Sensors -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="fas fa-flask me-2"></i>pH Sensors
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group" id="ph_levels"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relay States -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-toggle-on me-2"></i>Relay Controls</span>
+                        <div class="d-flex">
+                            <button class="toggle-all-button" id="toggleAllButton" onclick="toggleAllRelays()">
+                                <span class="spinner-border spinner-border-sm d-none" id="toggleAllSpinner"></span>
+                                <i class="fas fa-power-off me-2"></i>
+                                <span id="toggleAllText">Turn All On</span>
+                            </button>
+                            <button class="settings-button" id="relaySettingsBtn" data-bs-toggle="popover">
+                                <i class="fas fa-cog me-1"></i>Settings
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="relay_states" class="d-grid gap-2">
+                            <!-- Relays will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="row">
+            <!-- Toggle Relay Control -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <i class="fas fa-info-circle me-2"></i>System Status
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Connection Status:</span>
+                            <span id="connection_status" class="badge bg-secondary">Disconnected</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Last Update:</span>
+                            <span id="last_update">Never</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- pH Calibration Control -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <i class="fas fa-sliders-h me-2"></i>pH Sensor Calibration
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Select Sensor</label>
+                            <select class="form-select" id="ph_sensor_index">
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Calibration Solution pH</label>
+                            <select class="form-select" id="calibration_value">
+                                <option value="4.01">pH 4.01 (Acid)</option>
+                                <option value="6.86">pH 6.86 (Neutral)</option>
+                                <option value="9.18">pH 9.18 (Base)</option>
+                                <option value="custom">Custom Value</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="custom_ph_input">
+                            <label class="form-label">Custom pH Value</label>
+                            <input type="number" class="form-control" id="custom_calibration_value" step="0.01" min="0"
+                                max="14" value="7.00">
+                        </div>
+                        <button class="btn btn-info text-white w-100" id="calibrate_button"
+                            onclick="calibratePHSensor()">
+                            <span class="spinner-border spinner-border-sm d-none" id="calibrate_spinner"></span>
+                            Calibrate Sensor
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Template for the settings popover -->
+    <template id="relaySettingsTemplate">
+        <div>
+            <div class="popover-header py-2">
+                <strong><i class="fas fa-tags me-2"></i>Customize Relay Labels</strong>
+            </div>
+            <form id="relay_labels_form" class="p-3">
+                <div class="mb-3">
+                    <div id="relay_labels_inputs">
+                        <!-- Relay label inputs will be populated here -->
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                        onclick="closeRelaySettings()">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </template>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const socket = io();
+        let isConnected = false;
+        let isCalibrating = false;
+        let allRelaysOn = false;
+
+        // Connection handling
+        socket.on('connect', () => {
+            isConnected = true;
+            updateConnectionStatus();
+        });
+
+        socket.on('disconnect', () => {
+            isConnected = false;
+            updateConnectionStatus();
+        });
+
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connection_status');
+            if (isConnected) {
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'badge bg-success';
+            } else {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'badge bg-danger';
+            }
+        }
+
+        // Initialize pH sensor select
+        function initializePHSensorSelect() {
+            const select = document.getElementById('ph_sensor_index');
+            select.innerHTML = '';
+            for (let i = 0; i < 5; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Sensor ${i}`;
+                select.appendChild(option);
+            }
+        }
+
+        // Handle custom pH value selection
+        document.getElementById('calibration_value').addEventListener('change', function () {
+            const customInput = document.getElementById('custom_ph_input');
+            if (this.value === 'custom') {
+                customInput.classList.remove('d-none');
+            } else {
+                customInput.classList.add('d-none');
+            }
+        });
+
+        socket.on('sensor_data', (data) => {
+            console.log('Received sensor data:', data); // Added for debugging
+
+            // Update main sensor values
+            if (data.temperature !== undefined) {
+                document.getElementById('temperature').textContent = data.temperature.toFixed(1);
+            }
+            if (data.humidity !== undefined) {
+                document.getElementById('humidity').textContent = data.humidity.toFixed(1);
+            }
+            if (data.light_level !== undefined) {
+                document.getElementById('light_level').textContent = data.light_level.toFixed(1);
+            }
+
+            // Update pH levels
+            if (data.ph_levels !== undefined) {
+                const phLevelsList = document.getElementById('ph_levels');
+                phLevelsList.innerHTML = '';
+                data.ph_levels.forEach((ph, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    if (ph < 0) {
+                        li.innerHTML = `
+                            <span>
+                                <span class="status-indicator status-inactive"></span>
+                                Sensor ${index}
+                            </span>
+                            <span class="badge bg-danger">Not Connected</span>
+                        `;
+                    } else {
+                        li.innerHTML = `
+                            <span>
+                                <span class="status-indicator status-active"></span>
+                                Sensor ${index}
+                            </span>
+                            <span class="badge bg-primary">${ph.toFixed(2)} pH</span>
+                        `;
+                    }
+                    phLevelsList.appendChild(li);
+                });
+            }
+
+            // Update relay states with labels
+            if (data.relay_states !== undefined && data.relay_labels !== undefined) {
+                // Update allRelaysOn based on current state
+                allRelaysOn = data.relay_states.every(state => state === true);
+                updateToggleAllButton();
+
+                const relayStatesList = document.getElementById('relay_states');
+                relayStatesList.innerHTML = '';
+                data.relay_states.forEach((state, index) => {
+                    const label = data.relay_labels[index] || `Relay ${index}`;
+                    const button = document.createElement('button');
+                    button.className = `btn ${state ? 'btn-success' : 'btn-outline-secondary'} position-relative`;
+
+                    button.innerHTML = `
+                        <div class="d-flex align-items-center justify-content-between w-100">
+                            <div>
+                                <span class="status-indicator ${state ? 'status-active' : 'status-inactive'} position-absolute top-50 start-0 translate-middle-y ms-3"></span>
+                                <span class="ms-4">${label}</span>
+                            </div>
+                            <div>
+                                <span>${state ? 'ON' : 'OFF'}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    button.onclick = () => toggleRelay(index);
+                    relayStatesList.appendChild(button);
+                });
+            }
+
+            // Update last update time
+            document.getElementById('last_update').textContent = new Date().toLocaleTimeString();
+        });
+
+        // Simplified toggle function
+        function toggleRelay(index) {
+            socket.emit('toggle_relay', { relay_index: index });
+        }
+
+        async function calibratePHSensor() {
+            if (isCalibrating) return;
+
+            const button = document.getElementById('calibrate_button');
+            const spinner = document.getElementById('calibrate_spinner');
+            const select = document.getElementById('calibration_value');
+
+            const sensorIndex = parseInt(document.getElementById('ph_sensor_index').value);
+            let calibrationValue;
+
+            if (select.value === 'custom') {
+                calibrationValue = parseFloat(document.getElementById('custom_calibration_value').value);
+            } else {
+                calibrationValue = parseFloat(select.value);
+            }
+
+            // Validate pH value
+            if (isNaN(calibrationValue) || calibrationValue < 0 || calibrationValue > 14) {
+                alert('Please enter a valid pH value between 0 and 14');
+                return;
+            }
+
+            // Show loading state
+            isCalibrating = true;
+            button.disabled = true;
+            spinner.classList.remove('d-none');
+
+            try {
+                await new Promise((resolve, reject) => {
+                    socket.emit('calibrate_ph', {
+                        ph_sensor_index: sensorIndex,
+                        ph_calibration_value: calibrationValue
+                    }, (response) => {
+                        if (response && response.status === 'success') {
+                            resolve();
+                        } else {
+                            reject(new Error('Calibration failed'));
+                        }
+                    });
+
+                    // Timeout after 10 seconds
+                    setTimeout(() => reject(new Error('Calibration timed out')), 10000);
+                });
+
+                // Show success message
+                alert('Calibration successful!');
+            } catch (error) {
+                alert(`Calibration failed: ${error.message}`);
+            } finally {
+                // Reset loading state
+                isCalibrating = false;
+                button.disabled = false;
+                spinner.classList.add('d-none');
+            }
+        }
+
+        // Initialize popover
+        function initializeSettingsPopover() {
+            const popoverTemplate = document.getElementById('relaySettingsTemplate');
+            const popover = new bootstrap.Popover(document.getElementById('relaySettingsBtn'), {
+                html: true,
+                content: popoverTemplate.innerHTML,
+                sanitize: false,
+                placement: 'left',
+                trigger: 'click',
+                title: ' ', // Empty title to ensure proper styling
+                customClass: 'settings-dialog'
+            });
+
+            // Close popover when clicking outside
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                const settingsBtn = document.getElementById('relaySettingsBtn');
+                const popoverElement = document.querySelector('.popover');
+
+                if (popoverElement &&
+                    !popoverElement.contains(target) &&
+                    target !== settingsBtn &&
+                    !settingsBtn.contains(target)) {
+                    const popoverInstance = bootstrap.Popover.getInstance(settingsBtn);
+                    if (popoverInstance) {
+                        popoverInstance.hide();
+                    }
+                }
+            });
+
+            // Handle popover shown event
+            document.getElementById('relaySettingsBtn').addEventListener('shown.bs.popover', function () {
+                // Get the current popover instance
+                const popoverInstance = bootstrap.Popover.getInstance(this);
+                const popoverElement = document.querySelector('.popover');
+
+                // Attach form submit handler
+                const form = popoverElement.querySelector('#relay_labels_form');
+                form.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    const inputs = popoverElement.querySelectorAll('[id^="relay_label_"]');
+                    const labels = Array.from(inputs).map(input => input.value.trim());
+
+                    const response = await fetch('/api/relay_labels', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ labels })
+                    });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        popoverInstance.hide();
+                        alert('Relay labels updated successfully.');
+                    } else {
+                        alert(`Error: ${result.message}`);
+                    }
+                });
+
+                // Load relay labels
+                loadRelayLabels(popoverElement);
+            });
+        }
+
+        // Modified loadRelayLabels to work with popover
+        async function loadRelayLabels(popoverElement = null) {
+            try {
+                const response = await fetch('/api/relay_labels');
+                const data = await response.json();
+                const labels = data.labels;
+                const container = popoverElement ?
+                    popoverElement.querySelector('#relay_labels_inputs') :
+                    document.getElementById('relay_labels_inputs');
+
+                if (container) {
+                    container.innerHTML = '';
+                    labels.forEach((label, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'mb-2';
+                        div.innerHTML = `
+                            <label class="form-label small">Relay ${index}</label>
+                            <input type="text" class="form-control form-control-sm" id="relay_label_${index}" value="${label}">
+                        `;
+                        container.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load relay labels:', error);
+            }
+        }
+
+        // Toggle all relays
+        function toggleAllRelays() {
+            const button = document.getElementById('toggleAllButton');
+            const spinner = document.getElementById('toggleAllSpinner');
+            const textSpan = document.getElementById('toggleAllText');
+
+            // Disable button and show spinner
+            button.disabled = true;
+            spinner.classList.remove('d-none');
+
+            // Determine the action based on current state
+            const action = allRelaysOn ? 'off' : 'on';
+
+            // Emit the toggle event
+            socket.emit('toggle_all_relays', { action: action });
+
+            // Re-enable button and hide spinner after delay
+            setTimeout(() => {
+                button.disabled = false;
+                spinner.classList.add('d-none');
+            }, 1500);
+        }
+
+        function updateToggleAllButton() {
+            const button = document.getElementById('toggleAllButton');
+            const textSpan = document.getElementById('toggleAllText');
+
+            if (allRelaysOn) {
+                textSpan.textContent = 'Turn All Off';
+            } else {
+                textSpan.textContent = 'Turn All On';
+            }
+        }
+
+        // Add close function for the popover
+        function closeRelaySettings() {
+            const settingsBtn = document.getElementById('relaySettingsBtn');
+            const popoverInstance = bootstrap.Popover.getInstance(settingsBtn);
+            if (popoverInstance) {
+                popoverInstance.hide();
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializePHSensorSelect();
+            updateConnectionStatus();
+            initializeSettingsPopover();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "hydroponics.pb.h": "c",
+        "chrono": "cpp",
+        "variant": "cpp"
+    },
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        ".",
+        "-p",
+        "*test.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestEnabled": true
+}

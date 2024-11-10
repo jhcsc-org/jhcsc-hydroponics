@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "nanopb.proto";  // Include nanopb options
+
+message SensorData {
+    float temperature = 1;
+    float humidity = 2;
+    float light_level = 3;
+    repeated float ph_levels = 4 [(nanopb).max_count = 5];
+    repeated bool relay_states = 5 [(nanopb).max_count = 5];
+}
+
+message Command {
+    enum CommandType {
+        TOGGLE_RELAY = 0;
+        CALIBRATE_PH = 1;
+    }
+    CommandType type = 1;
+    uint32 relay_index = 2;            // Used with TOGGLE_RELAY
+    uint32 ph_sensor_index = 3;        // Used with CALIBRATE_PH
+    float ph_calibration_value = 4;    // Used with CALIBRATE_PH
+}

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: ${THINGNAME}
+    volumes:
+      - .:/app
+      - ./config/certs:/app/config/certs:ro
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"  
+    restart: unless-stopped
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"  
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SERIAL_PORT=${DEFAULT_SERIAL_PORT} 
+    user: "appuser"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
